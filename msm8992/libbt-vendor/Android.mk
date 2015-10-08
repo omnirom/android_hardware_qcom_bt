@@ -16,32 +16,57 @@
 
 LOCAL_PATH := $(call my-dir)
 
-ifneq ($(BOARD_HAVE_BLUETOOTH_QCOM),)
+ifeq ($(BOARD_HAVE_BLUETOOTH_QCOM),true)
 
 include $(CLEAR_VARS)
 
-BDROID_DIR:= external/bluetooth/bluedroid
+BDROID_DIR:= system/bt
 
 LOCAL_SRC_FILES := \
         src/bt_vendor_qcom.c \
         src/hardware.c \
-        src/userial_vendor.c
+        src/hci_uart.c \
+        src/hci_smd.c \
+        src/hw_rome.c \
+        src/hw_ar3k.c \
+        src/bt_vendor_persist.cpp
+
+ifeq ($(QCOM_BT_USE_SIBS),true)
+LOCAL_CFLAGS += -DQCOM_BT_SIBS_ENABLE
+endif
+
+ifeq ($(BOARD_HAS_QCA_BT_ROME),true)
+LOCAL_CFLAGS += -DBT_SOC_TYPE_ROME
+endif
 
 LOCAL_C_INCLUDES += \
         $(LOCAL_PATH)/include \
-        $(BDROID_DIR)/hci/include
+        $(BDROID_DIR)/hci/include \
+        $(TARGET_OUT_HEADERS)/bt/hci_qcomm_init
+
+ifeq ($(BOARD_HAS_QCA_BT_AR3002), true)
+LOCAL_C_FLAGS := \
+        -DBT_WAKE_VIA_PROC
+endif #BOARD_HAS_QCA_BT_AR3002
+
+ifeq ($(WIFI_BT_STATUS_SYNC), true)
+LOCAL_CFLAGS += -DWIFI_BT_STATUS_SYNC
+endif #WIFI_BT_STATUS_SYNC
 
 LOCAL_SHARED_LIBRARIES := \
         libcutils \
-        liblog
+        liblog \
+        libbtnv
 
 LOCAL_MODULE := libbt-vendor
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_CLASS := SHARED_LIBRARIES
 LOCAL_MODULE_OWNER := qcom
-LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)
 
-include $(LOCAL_PATH)/vnd_buildcfg.mk
+LOCAL_CFLAGS += -DBT_NV_SUPPORT
+#LOCAL_CFLAGS += -DREAD_BT_ADDR_FROM_PROP
+
+#include $(LOCAL_PATH)/vnd_buildcfg.mk
 
 include $(BUILD_SHARED_LIBRARY)
 
