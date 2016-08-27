@@ -664,12 +664,7 @@ static int op(bt_vendor_opcode_t opcode, void *param)
                     case BT_SOC_ROME:
                     case BT_SOC_AR3K:
                         /* BT Chipset Power Control through Device Tree Node */
-                        if(nState == BT_VND_PWR_ON && property_get_bool("wc_transport.vnd_power", 0)) {
-                                bt_powerup(BT_VND_PWR_OFF);
-                        }
                         retval = bt_powerup(nState);
-                        if(retval == 0)
-                            property_set("wc_transport.vnd_power", nState == BT_VND_PWR_ON ? "1" : "0");
                     default:
                         break;
                 }
@@ -917,7 +912,7 @@ static int op(bt_vendor_opcode_t opcode, void *param)
             break;
 
         case BT_VND_OP_GET_LPM_IDLE_TIMEOUT:
-            {
+            if (btSocType ==  BT_SOC_AR3K) {
                 uint32_t *timeout_ms = (uint32_t *) param;
                 *timeout_ms = 1000;
             }

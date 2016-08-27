@@ -78,7 +78,6 @@
 #define EDL_SET_BAUDRATE_CMD_OCF        (0x48)
 #define EDL_WIPOWER_VS_CMD_OCF          (0x1f)
 #define HCI_VS_GET_ADDON_FEATURES_SUPPORT   (0x1d)
-#define EDL_GET_BOARD_ID              (0x23)
 
 /* VS Commands */
 #define VSC_SET_BAUDRATE_REQ_LEN        (1)
@@ -106,8 +105,8 @@
 #define EDL_WIP_QUERY_CHARGING_STATUS_EVT    (0x18)
 #define EDL_WIP_START_HANDOFF_TO_HOST_EVENT  (0x19)
 #define HCI_VS_GET_ADDON_FEATURES_EVENT      (0x1B)
-#define EDL_BOARD_ID_RESPONSE                (0x23)
 #define HCI_VS_GET_BUILD_VER_EVT             (0x05)
+#define HCI_VS_STRAY_EVT                (0x17)
 
 /* Status Codes of HCI CMD execution*/
 #define HCI_CMD_SUCCESS                     (0x0)
@@ -158,12 +157,12 @@
 #define ROME_NVM_TLV_1_0_3_PATH         "/system/etc/firmware/nvm_tlv_1.3.bin"
 #define ROME_RAMPATCH_TLV_2_0_1_PATH    "/system/etc/firmware/rampatch_tlv_2.1.tlv"
 #define ROME_NVM_TLV_2_0_1_PATH         "/system/etc/firmware/nvm_tlv_2.1.bin"
-#define ROME_RAMPATCH_TLV_3_0_0_PATH    "/vendor/firmware/btfw30.tlv"
-#define ROME_NVM_TLV_3_0_0_PATH         "/vendor/firmware/btnv30.bin"
+#define ROME_RAMPATCH_TLV_3_0_0_PATH    "/bt_firmware/image/btfw30.tlv"
+#define ROME_NVM_TLV_3_0_0_PATH         "/bt_firmware/image/btnv30.bin"
+#define ROME_RAMPATCH_TLV_3_0_2_PATH    "/bt_firmware/image/btfw32.tlv"
+#define ROME_NVM_TLV_3_0_2_PATH         "/bt_firmware/image/btnv32.bin"
 //#define ROME_RAMPATCH_TLV_3_0_0_PATH    "/system/etc/firmware/rampatch_tlv_3.0.tlv"
 //#define ROME_NVM_TLV_3_0_0_PATH         "/system/etc/firmware/nvm_tlv_3.0.bin"
-#define ROME_RAMPATCH_TLV_3_0_2_PATH    "/vendor/firmware/btfw32.tlv"
-#define ROME_NVM_TLV_3_0_2_PATH         "/vendor/firmware/btnv32.bin"
 //#define ROME_RAMPATCH_TLV_3_0_2_PATH    "/system/etc/firmware/rampatch_tlv_3.2.tlv"
 //#define ROME_NVM_TLV_3_0_2_PATH         "/system/etc/firmware/nvm_tlv_3.2.bin"
 
