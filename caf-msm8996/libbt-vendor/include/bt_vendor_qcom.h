@@ -17,8 +17,8 @@
 #ifndef BT_VENDOR_QCOM_H
 #define BT_VENDOR_QCOM_H
 
+#include <stdbool.h>
 #include "bt_vendor_lib.h"
-//#include "vnd_buildcfg.h"
 
 #ifndef FALSE
 #define FALSE  0
@@ -35,8 +35,9 @@
 typedef enum {
     BT_SOC_DEFAULT = 0,
     BT_SOC_SMD = BT_SOC_DEFAULT,
-    BT_SOC_ROME,
     BT_SOC_AR3K,
+    BT_SOC_ROME,
+    BT_SOC_CHEROKEE,
     /* Add chipset type here */
     BT_SOC_RESERVED
 }bt_soc_type;
@@ -46,7 +47,6 @@ typedef enum {
     BT_VND_OP_ANT_USERIAL_CLOSE
 }ant_serial;
 
-extern bt_vendor_callbacks_t *bt_vendor_cbacks;
 /* HW_NEED_END_WITH_HCI_RESET
 
     code implementation of sending a HCI_RESET command during the epilog
@@ -63,6 +63,29 @@ extern bt_vendor_callbacks_t *bt_vendor_cbacks;
 #define HCI_CMD_PREAMBLE_SIZE 3
 #define HCI_EVT_CMD_CMPL_STATUS_RET_BYTE   5
 #define HCI_EVT_CMD_CMPL_OPCODE        3
+#define BT_PWR_CNTRL_DEVICE    "/dev/btpower"
+
+enum {
+    BT_STATUS_SUCCESS = 0,
+    BT_STATUS_FAIL,
+    BT_STATUS_INVAL,
+    BT_STATUS_NOMEM,
+    BT_STATUS_PROP_FAILURE,
+};
+#define BT_CMD_PWR_CTRL         0xbfad
+struct bt_qcom_struct {
+    int fd[2];
+    int ant_fd;
+    int fm_fd;
+    bt_vendor_callbacks_t *cb;
+    uint8_t bdaddr[6];
+    int soc_type;
+    int rfkill_id;
+    char *rfkill_state;
+    bool enable_extldo;
+};
+extern struct bt_qcom_struct *q;
+extern pthread_mutex_t q_lock;
 
 #endif /* BT_VENDOR_QCOM_H */
 

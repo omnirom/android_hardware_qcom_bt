@@ -19,6 +19,8 @@
 #ifndef HCI_UART_H
 #define HCI_UART_H
 
+#include <asm-generic/ioctls.h>
+
 /* Variables to identify the platform */
 /*BT HS UART TTY DEVICE */
 #define BT_HS_UART_DEVICE "/dev/ttyHS0"
@@ -90,9 +92,11 @@
 #endif // (BT_WAKE_VIA_USERIAL_IOCTL==TRUE)
 
 /* UART CLOCK IOCTLS*/
-#define USERIAL_OP_CLK_ON 0x5441
-#define USERIAL_OP_CLK_OFF 0x5442
-#define USERIAL_OP_CLK_STATE 0x5443
+/* UART CLOCK IOCTLS*/
+#define USERIAL_OP_CLK_ON    TIOCPMGET    /* PM get */
+#define USERIAL_OP_CLK_OFF    TIOCPMPUT   /* PM put */
+#define USERIAL_OP_CLK_STATE    TIOCPMACT    /* PM is active */
+
 /******************************************************************************
 **  Type definitions
 ******************************************************************************/
@@ -221,6 +225,29 @@ void userial_vendor_set_baud(uint8_t userial_baud);
 **
 *******************************************************************************/
 int userial_vendor_ioctl(userial_vendor_ioctl_op_t op, int *p_data);
+
+/*******************************************************************************
+**
+** Function        userial_to_tcio_baud
+**
+** Description     helper function converts USERIAL baud rates into TCIO
+**                  conforming baud rates
+**
+** Returns         TRUE/FALSE
+**
+*******************************************************************************/
+uint8_t userial_to_tcio_baud(uint8_t cfg_baud, uint32_t *baud);
+
+/*******************************************************************************
+**
+** Function        userial_to_baud_tcio
+**
+** Description     helper function converts TCIO baud rate into integer
+**
+** Returns         uint32_t
+**
+*******************************************************************************/
+int userial_tcio_baud_to_int(uint32_t baud);
 
 /*******************************************************************************
 **

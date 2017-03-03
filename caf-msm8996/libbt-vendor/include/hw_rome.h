@@ -18,6 +18,7 @@
 #ifndef HW_ROME_H
 #define HW_ROME_H
 
+
 /******************************************************************************
 **  Constants & Macros
 ******************************************************************************/
@@ -150,21 +151,17 @@
 #define EXTRACT_BYTE(val, pos)      (char) (((val) >> (8 * (pos))) & 0xFF)
 #define CALC_SEG_SIZE(len, max)   ((plen) % (max))?((plen/max)+1) : ((plen) / (max))
 
-#define ROME_FW_PATH        "/system/etc/firmware/rampatch.img"
-#define ROME_RAMPATCH_TLV_PATH      "/system/etc/firmware/rampatch_tlv.img"
-#define ROME_NVM_TLV_PATH         "/system/etc/firmware/nvm_tlv.bin"
-#define ROME_RAMPATCH_TLV_1_0_3_PATH    "/system/etc/firmware/rampatch_tlv_1.3.tlv"
-#define ROME_NVM_TLV_1_0_3_PATH         "/system/etc/firmware/nvm_tlv_1.3.bin"
-#define ROME_RAMPATCH_TLV_2_0_1_PATH    "/system/etc/firmware/rampatch_tlv_2.1.tlv"
-#define ROME_NVM_TLV_2_0_1_PATH         "/system/etc/firmware/nvm_tlv_2.1.bin"
-#define ROME_RAMPATCH_TLV_3_0_0_PATH    "/bt_firmware/image/btfw30.tlv"
-#define ROME_NVM_TLV_3_0_0_PATH         "/bt_firmware/image/btnv30.bin"
-#define ROME_RAMPATCH_TLV_3_0_2_PATH    "/bt_firmware/image/btfw32.tlv"
-#define ROME_NVM_TLV_3_0_2_PATH         "/bt_firmware/image/btnv32.bin"
-//#define ROME_RAMPATCH_TLV_3_0_0_PATH    "/system/etc/firmware/rampatch_tlv_3.0.tlv"
-//#define ROME_NVM_TLV_3_0_0_PATH         "/system/etc/firmware/nvm_tlv_3.0.bin"
-//#define ROME_RAMPATCH_TLV_3_0_2_PATH    "/system/etc/firmware/rampatch_tlv_3.2.tlv"
-//#define ROME_NVM_TLV_3_0_2_PATH         "/system/etc/firmware/nvm_tlv_3.2.bin"
+#define ROME_FW_PATH                      "/system/etc/firmware/rampatch.img"
+#define ROME_RAMPATCH_TLV_PATH            "/system/etc/firmware/rampatch_tlv.img"
+#define ROME_NVM_TLV_PATH                 "/system/etc/firmware/nvm_tlv.bin"
+#define ROME_RAMPATCH_TLV_1_0_3_PATH      "/system/etc/firmware/rampatch_tlv_1.3.tlv"
+#define ROME_NVM_TLV_1_0_3_PATH           "/system/etc/firmware/nvm_tlv_1.3.bin"
+#define ROME_RAMPATCH_TLV_2_0_1_PATH      "/system/etc/firmware/rampatch_tlv_2.1.tlv"
+#define ROME_NVM_TLV_2_0_1_PATH           "/system/etc/firmware/nvm_tlv_2.1.bin"
+#define ROME_RAMPATCH_TLV_3_0_0_PATH      "/bt_firmware/image/btfw30.tlv"
+#define ROME_NVM_TLV_3_0_0_PATH           "/bt_firmware/image/btnv30.bin"
+#define ROME_RAMPATCH_TLV_3_0_2_PATH      "/bt_firmware/image/btfw32.tlv"
+#define ROME_NVM_TLV_3_0_2_PATH           "/bt_firmware/image/btnv32.bin"
 
 #define ROME_3_1_FW_SU  "bprm.cnss.3.1"
 #define ROME_3_2_FW_SU  "btfwp.cnss.3.2"
@@ -237,10 +234,10 @@ typedef struct {
 
 enum{
     BAUDRATE_115200     = 0x00,
-    BAUDRATE_57600       = 0x01,
-    BAUDRATE_38400       = 0x02,
-    BAUDRATE_19200       = 0x03,
-    BAUDRATE_9600         = 0x04,
+    BAUDRATE_57600      = 0x01,
+    BAUDRATE_38400      = 0x02,
+    BAUDRATE_19200      = 0x03,
+    BAUDRATE_9600       = 0x04,
     BAUDRATE_230400     = 0x05,
     BAUDRATE_250000     = 0x06,
     BAUDRATE_460800     = 0x07,
@@ -283,4 +280,11 @@ enum{
     ROME_VER_3_0 = ((ROME_PATCH_VER_0300 << 16 ) | ROME_SOC_ID_22 ),
     ROME_VER_3_2 = ((ROME_PATCH_VER_0302 << 16 ) | ROME_SOC_ID_44 )
 };
+
+//declarations
+int rome_soc_init(int fd, char *bdaddr);
+int check_embedded_mode(int fd);
+int rome_get_addon_feature_list(int fd);
+void enable_controller_log(int fd, unsigned char req);
+void cherokee_shutdown_vs_cmd(int fd);
 #endif /* HW_ROME_H */

@@ -279,7 +279,8 @@ int userial_vendor_open(tUSERIAL_CFG *p_cfg)
 
     if ((vnd_userial.fd = open(vnd_userial.port_name, O_RDWR|O_NOCTTY)) == -1)
     {
-        ALOGE("userial vendor open: unable to open %s", vnd_userial.port_name);
+        ALOGE("userial vendor open: unable to open %s: %s(%d)", vnd_userial.port_name,
+            strerror(errno), errno);
         return -1;
     }
 
