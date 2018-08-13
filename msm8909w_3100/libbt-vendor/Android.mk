@@ -31,7 +31,7 @@ LOCAL_SRC_FILES := \
         src/bt_vendor_persist.cpp
 
 #Disable this flag in case if FM over UART support not needed
-ifeq ($(QCOM_BT_FM_OVER_UART),true)
+ifneq ($(TARGET_SUPPORTS_WEARABLES),true)
 LOCAL_CFLAGS := -DFM_OVER_UART
 endif
 
@@ -44,11 +44,7 @@ LOCAL_C_INCLUDES += \
         $(LOCAL_PATH)/include \
         external/bluetooth/bluedroid/hci/include \
         system/bt/hci/include \
-        $(TARGET_OUT_HEADERS)/bt/hci_qcomm_init \
-        $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
-
-LOCAL_ADDITIONAL_DEPENDENCIES += \
-$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+        $(TARGET_OUT_HEADERS)/bt/hci_qcomm_init
 
 ifeq ($(BOARD_HAS_QCA_BT_AR3002), true)
 LOCAL_C_FLAGS := \
@@ -61,7 +57,8 @@ endif #WIFI_BT_STATUS_SYNC
 
 LOCAL_SHARED_LIBRARIES := \
         libcutils \
-        liblog
+        liblog \
+        libbtnv
 
 LOCAL_CFLAGS += -Wno-error
 LOCAL_MODULE := libbt-vendor
@@ -76,15 +73,7 @@ else
 LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR_SHARED_LIBRARIES)
 endif
 
-ifeq ($(QCOM_BT_USE_BTNV),true)
 LOCAL_CFLAGS += -DBT_NV_SUPPORT
-ifeq ($(QCPATH),)
-LOCAL_SHARED_LIBRARIES += libdl
-LOCAL_CFLAGS += -DBT_NV_SUPPORT_DL
-else
-LOCAL_SHARED_LIBRARIES += libbtnv
-endif
-endif
 
 ifneq ($(BOARD_ANT_WIRELESS_DEVICE),)
 LOCAL_CFLAGS += -DENABLE_ANT

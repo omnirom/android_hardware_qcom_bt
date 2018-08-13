@@ -35,7 +35,7 @@ extern "C" {
 #define LOG_TAG "bt_vendor"
 
 #include <sys/socket.h>
-#include <log/log.h>
+#include <utils/Log.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
@@ -46,20 +46,15 @@ extern "C" {
 #include <ctype.h>
 #include <cutils/properties.h>
 #include <stdlib.h>
-#include <string.h>
 #include <termios.h>
 #include <string.h>
 #include <stdbool.h>
-#include <unistd.h>
-
 #include "bt_hci_bdroid.h"
 #include "bt_vendor_qcom.h"
 #include "hci_uart.h"
 #include "hw_rome.h"
 
-#define BOARD_ID_LEN 0x5
-#define MSB_NIBBLE_MASK 0xF0
-#define LSB_NIBBLE_MASK 0x0F
+#define BT_VERSION_FILEPATH "/data/misc/bluedroid/bt_fw_version.txt"
 
 #ifdef __cplusplus
 }
@@ -68,9 +63,6 @@ extern "C" {
 #define RESERVED(p)  if(p) ALOGI( "%s: reserved param", __FUNCTION__);
 
 int read_vs_hci_event(int fd, unsigned char* buf, int size);
-int get_boardid_req(int fd);
-unsigned char convert2ascii(unsigned char temp);
-
 
 /******************************************************************************
 **  Variables
@@ -79,25 +71,23 @@ FILE *file;
 unsigned char *phdr_buffer;
 unsigned char *pdata_buffer = NULL;
 patch_info rampatch_patch_info;
-int rome_ver = ROME_VER_UNKNOWN;
+int chipset_ver = 0;
 unsigned char gTlv_type;
 unsigned char gTlv_dwndCfg;
 static unsigned int wipower_flag = 0;
 static unsigned int wipower_handoff_ready = 0;
-char *rampatch_file_path;
-char *nvm_file_path;
+char *rampatch_file_path = NULL;
+char *nvm_file_path = NULL;
 char *fw_su_info = NULL;
 unsigned short fw_su_offset =0;
 extern char enable_extldo;
 unsigned char wait_vsc_evt = TRUE;
 bool patch_dnld_pending = FALSE;
 int dnld_fd = -1;
-unsigned char board_id[BOARD_ID_LEN];
 
 /******************************************************************************
 **  Extern variables
 ******************************************************************************/
-extern uint8_t vnd_local_bd_addr[6];
 
 /*****************************************************************************
 **   Functions
@@ -136,28 +126,31 @@ int get_vs_hci_event(unsigned char *rsp)
     int err = 0;
     unsigned char paramlen = 0;
     unsigned char EMBEDDED_MODE_CHECK = 0x02;
+    FILE *btversionfile = 0;
     unsigned int soc_id = 0;
     unsigned int productid = 0;
     unsigned short patchversion = 0;
     char build_label[255];
     int build_lbl_len;
+    unsigned short buildversion = 0;
 
     if( (rsp[EVENTCODE_OFFSET] == VSEVENT_CODE) || (rsp[EVENTCODE_OFFSET] == EVT_CMD_COMPLETE))
-        ALOGV("%s: Received HCI-Vendor Specific event", __FUNCTION__);
+        ALOGI("%s: Received HCI-Vendor Specific event", __FUNCTION__);
     else {
         ALOGI("%s: Failed to receive HCI-Vendor Specific event", __FUNCTION__);
         err = -EIO;
         goto failed;
     }
 
-    ALOGI("%s: length 0x%x resp 0x%x type 0x%x", __FUNCTION__, paramlen = rsp[EVT_PLEN],
-          rsp[CMD_RSP_OFFSET], rsp[RSP_TYPE_OFFSET]);
+    ALOGI("%s: Parameter Length: 0x%x", __FUNCTION__, paramlen = rsp[EVT_PLEN]);
+    ALOGI("%s: Command response: 0x%x", __FUNCTION__, rsp[CMD_RSP_OFFSET]);
+    ALOGI("%s: Response type   : 0x%x", __FUNCTION__, rsp[RSP_TYPE_OFFSET]);
 
     /* Check the status of the operation */
     switch ( rsp[CMD_RSP_OFFSET] )
     {
         case EDL_CMD_REQ_RES_EVT:
-        ALOGV("%s: Command Request Response", __FUNCTION__);
+        ALOGI("%s: Command Request Response", __FUNCTION__);
         switch(rsp[RSP_TYPE_OFFSET])
         {
             case EDL_PATCH_VER_RES_EVT:
@@ -174,7 +167,7 @@ int get_vs_hci_event(unsigned char *rsp)
                                             rsp[PATCH_PATCH_VER_OFFSET] )));
 
                 /* ROM Build Version indicates ROM build version like 1.0/1.1/2.0 */
-                ALOGI("\t Current ROM Build Version\t: 0x%04x", rome_ver =
+                ALOGI("\t Current ROM Build Version\t: 0x%04x", buildversion =
                     (int)(rsp[PATCH_ROM_BUILD_VER_OFFSET + 1] << 8 |
                                             rsp[PATCH_ROM_BUILD_VER_OFFSET] ));
 
@@ -188,17 +181,27 @@ int get_vs_hci_event(unsigned char *rsp)
                                                 rsp[PATCH_SOC_VER_OFFSET]  ));
                 }
 
+                if (NULL != (btversionfile = fopen(BT_VERSION_FILEPATH, "wb"))) {
+                    fprintf(btversionfile, "Bluetooth Controller Product ID    : 0x%08x\n", productid);
+                    fprintf(btversionfile, "Bluetooth Controller Patch Version : 0x%04x\n", patchversion);
+                    fprintf(btversionfile, "Bluetooth Controller Build Version : 0x%04x\n", buildversion);
+                    fprintf(btversionfile, "Bluetooth Controller SOC Version   : 0x%08x\n", soc_id);
+                    fclose(btversionfile);
+                }else {
+                    ALOGI("Failed to dump SOC version info. Errno:%d", errno);
+                }
                 /* Rome Chipset Version can be decided by Patch version and SOC version,
                 Upper 2 bytes will be used for Patch version and Lower 2 bytes will be
                 used for SOC as combination for BT host driver */
-                rome_ver = (rome_ver << 16) | (soc_id & 0x0000ffff);
+                chipset_ver = (buildversion << 16) |(soc_id & 0x0000ffff);
+
                 break;
             case EDL_TVL_DNLD_RES_EVT:
             case EDL_CMD_EXE_STATUS_EVT:
                 switch (err = rsp[CMD_STATUS_OFFSET])
                     {
                     case HCI_CMD_SUCCESS:
-                        ALOGV("%s: Download Packet successfully!", __FUNCTION__);
+                        ALOGI("%s: Download Packet successfully!", __FUNCTION__);
                         break;
                     case PATCH_LEN_ERROR:
                         ALOGI("%s: Invalid patch length argument passed for EDL PATCH "
@@ -228,19 +231,11 @@ int get_vs_hci_event(unsigned char *rsp)
                 *(build_label+build_lbl_len) = '\0';
 
                 ALOGI("BT SoC FW SU Build info: %s, %d", build_label, build_lbl_len);
-            break;
-            case EDL_BOARD_ID_RESPONSE:
-                ALOGI("%s: board id %x %x!!", __FUNCTION__, rsp[6], rsp[7]);
-                if (rsp[6] <= 0x00) {
-                    board_id[0] = convert2ascii ((rsp[7] & MSB_NIBBLE_MASK) >> 4);
-                    board_id[1] = convert2ascii (rsp[7] & LSB_NIBBLE_MASK);
-                    board_id[2] = '\0';
+                if (NULL != (btversionfile = fopen(BT_VERSION_FILEPATH, "a+b"))) {
+                    fprintf(btversionfile, "Bluetooth Contoller SU Build info  : %s\n", build_label);
+                    fclose(btversionfile);
                 } else {
-                    board_id[0] = convert2ascii ((rsp[6] & MSB_NIBBLE_MASK) >> 4);
-                    board_id[1] = convert2ascii (rsp[6] & LSB_NIBBLE_MASK);
-                    board_id[2] = convert2ascii ((rsp[7] & MSB_NIBBLE_MASK) >> 4);
-                    board_id[3] = convert2ascii (rsp[7] & LSB_NIBBLE_MASK);
-                    board_id[4] = '\0';
+                    ALOGI("Failed to dump  FW SU build info. Errno:%d", errno);
                 }
             break;
         }
@@ -321,7 +316,7 @@ failed:
 int read_vs_hci_event(int fd, unsigned char* buf, int size)
 {
     int remain, r;
-    int count = 0;
+    int count = 0, i;
 
     if (size <= 0) {
         ALOGE("Invalid size arguement!");
@@ -451,7 +446,7 @@ void frame_hci_cmd_pkt(
             /* Copy the patch header info as CMD params */
             memcpy(&cmd[5], phdr_buffer, PATCH_HDR_LEN);
             ALOGD("%s: Sending EDL_PATCH_SET_REQ_CMD", __FUNCTION__);
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
+            ALOGD("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
                 segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
             break;
         case EDL_PATCH_DLD_REQ_CMD:
@@ -465,47 +460,42 @@ void frame_hci_cmd_pkt(
             cmd[9]  = EXTRACT_BYTE(p_base_addr, 3);
             memcpy(&cmd[10], (pdata_buffer + offset), size);
 
-            ALOGV("%s: Sending EDL_PATCH_DLD_REQ_CMD: size: %d bytes",
+            ALOGD("%s: Sending EDL_PATCH_DLD_REQ_CMD: size: %d bytes",
                 __FUNCTION__, size);
-            ALOGV("HCI-CMD %d:\t0x%x\t0x%x\t0x%x\t0x%x\t0x%x\t0x%x\t0x%x\t"
+            ALOGD("HCI-CMD %d:\t0x%x\t0x%x\t0x%x\t0x%x\t0x%x\t0x%x\t0x%x\t"
                 "0x%x\t0x%x\t0x%x\t\n", segtNo, cmd[0], cmd[1], cmd[2],
                 cmd[3], cmd[4], cmd[5], cmd[6], cmd[7], cmd[8], cmd[9]);
             break;
         case EDL_PATCH_ATCH_REQ_CMD:
             ALOGD("%s: Sending EDL_PATCH_ATTACH_REQ_CMD", __FUNCTION__);
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
+            ALOGD("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
             segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
             break;
         case EDL_PATCH_RST_REQ_CMD:
             ALOGD("%s: Sending EDL_PATCH_RESET_REQ_CMD", __FUNCTION__);
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
+            ALOGD("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
             segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
             break;
         case EDL_PATCH_VER_REQ_CMD:
             ALOGD("%s: Sending EDL_PATCH_VER_REQ_CMD", __FUNCTION__);
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
+            ALOGD("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
             segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
             break;
         case EDL_PATCH_TLV_REQ_CMD:
-            ALOGV("%s: Sending EDL_PATCH_TLV_REQ_CMD", __FUNCTION__);
+            ALOGD("%s: Sending EDL_PATCH_TLV_REQ_CMD", __FUNCTION__);
             /* Parameter Total Length */
             cmd[3] = size +2;
 
             /* TLV Segment Length */
             cmd[5] = size;
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
+            ALOGD("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
             segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
             offset = (segtNo * MAX_SIZE_PER_TLV_SEGMENT);
             memcpy(&cmd[6], (pdata_buffer + offset), size);
             break;
         case EDL_GET_BUILD_INFO:
             ALOGD("%s: Sending EDL_GET_BUILD_INFO", __FUNCTION__);
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
-                segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
-            break;
-        case EDL_GET_BOARD_ID:
-            ALOGD("%s: Sending EDL_GET_BOARD_ID", __FUNCTION__);
-            ALOGV("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
+            ALOGD("HCI-CMD %d:\t0x%x \t0x%x \t0x%x \t0x%x \t0x%x",
                 segtNo, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
             break;
         default:
@@ -688,7 +678,7 @@ error:
 
 static int rome_download_rampatch(int fd)
 {
-    int c, size, index, ret = -1;
+    int c, tmp, size, index, ret = -1;
 
     ALOGI("%s: ", __FUNCTION__);
 
@@ -763,6 +753,7 @@ pdata_alloc_failed:
     free(phdr_buffer);
 phdr_alloc_failed:
     fclose(file);
+error:
     return ret;
 }
 
@@ -798,7 +789,7 @@ error:
 
 int rome_rampatch_reset(int fd)
 {
-    int size, err = 0;
+    int size, err = 0, flags;
     unsigned char cmd[HCI_MAX_CMD_SIZE];
     struct timespec tm = { 0, 100*1000*1000 }; /* 100 ms */
 
@@ -826,11 +817,12 @@ error:
     return err;
 }
 
+/* This function is called with q_lock held and q is non-NULL */
 int rome_get_tlv_file(char *file_path)
 {
     FILE * pFile;
     long fileSize;
-    int readSize, nvm_length, nvm_index, i;
+    int readSize, err = 0, total_segment, remain_size, nvm_length, nvm_index, i;
     unsigned short nvm_tag_len;
     tlv_patch_info *ptlv_header;
     tlv_nvm_hdr *nvm_ptr;
@@ -893,7 +885,7 @@ int rome_get_tlv_file(char *file_path)
         ALOGI("====================================================");
 
     } else if(ptlv_header->tlv_type == TLV_TYPE_NVM) {
-        ALOGV("====================================================");
+        ALOGI("====================================================");
         ALOGI("TLV Type\t\t\t : 0x%x", ptlv_header->tlv_type);
         ALOGI("Length\t\t\t : %d bytes",  nvm_length = (ptlv_header->tlv_length1) |
                                                     (ptlv_header->tlv_length2 << 8) |
@@ -905,10 +897,10 @@ int rome_get_tlv_file(char *file_path)
        for(nvm_byte_ptr=(unsigned char *)(nvm_ptr = &(ptlv_header->tlv.nvm)), nvm_index=0;
              nvm_index < nvm_length ; nvm_ptr = (tlv_nvm_hdr *) nvm_byte_ptr)
        {
-            ALOGV("TAG ID\t\t\t : %d", nvm_ptr->tag_id);
-            ALOGV("TAG Length\t\t\t : %d", nvm_tag_len = nvm_ptr->tag_len);
-            ALOGV("TAG Pointer\t\t\t : %d", nvm_ptr->tag_ptr);
-            ALOGV("TAG Extended Flag\t\t : %d", nvm_ptr->tag_ex_flag);
+            ALOGI("TAG ID\t\t\t : %d", nvm_ptr->tag_id);
+            ALOGI("TAG Length\t\t\t : %d", nvm_tag_len = nvm_ptr->tag_len);
+            ALOGI("TAG Pointer\t\t\t : %d", nvm_ptr->tag_ptr);
+            ALOGI("TAG Extended Flag\t\t : %d", nvm_ptr->tag_ex_flag);
 
             /* Increase nvm_index to NVM data */
             nvm_index+=sizeof(tlv_nvm_hdr);
@@ -916,8 +908,8 @@ int rome_get_tlv_file(char *file_path)
 
             /* Write BD Address */
             if(nvm_ptr->tag_id == TAG_NUM_2){
-                memcpy(nvm_byte_ptr, vnd_local_bd_addr, 6);
-                ALOGV("BD Address: %.02x:%.02x:%.02x:%.02x:%.02x:%.02x",
+                memcpy(nvm_byte_ptr, q->bdaddr, 6);
+                ALOGI("BD Address: %.02x:%.02x:%.02x:%.02x:%.02x:%.02x",
                     *nvm_byte_ptr, *(nvm_byte_ptr+1), *(nvm_byte_ptr+2),
                     *(nvm_byte_ptr+3), *(nvm_byte_ptr+4), *(nvm_byte_ptr+5));
             }
@@ -925,7 +917,7 @@ int rome_get_tlv_file(char *file_path)
             for(i =0;(i<nvm_ptr->tag_len && (i*3 + 2) <PRINT_BUF_SIZE);i++)
                 snprintf((char *) data_buf, PRINT_BUF_SIZE, "%s%.02x ", (char *)data_buf, *(nvm_byte_ptr + i));
 
-            ALOGV("TAG Data\t\t\t : %s", data_buf);
+            ALOGI("TAG Data\t\t\t : %s", data_buf);
 
             /* Clear buffer */
             memset(data_buf, 0x0, PRINT_BUF_SIZE);
@@ -935,7 +927,7 @@ int rome_get_tlv_file(char *file_path)
             nvm_byte_ptr +=nvm_ptr->tag_len;
         }
 
-        ALOGV("====================================================");
+        ALOGI("====================================================");
 
     } else {
         ALOGI("TLV Header type is unknown (%d) ", ptlv_header->tlv_type);
@@ -950,7 +942,7 @@ int rome_tlv_dnld_segment(int fd, int index, int seg_size, unsigned char wait_cc
     unsigned char cmd[HCI_MAX_CMD_SIZE];
     unsigned char rsp[HCI_MAX_EVENT_SIZE];
 
-    ALOGV("%s: Downloading TLV Patch segment no.%d, size:%d", __FUNCTION__, index, seg_size);
+    ALOGI("%s: Downloading TLV Patch segment no.%d, size:%d", __FUNCTION__, index, seg_size);
 
     /* Frame the HCI CMD PKT to be sent to Controller*/
     frame_hci_cmd_pkt(cmd, EDL_PATCH_TLV_REQ_CMD, 0, index, seg_size);
@@ -976,7 +968,7 @@ int rome_tlv_dnld_segment(int fd, int index, int seg_size, unsigned char wait_cc
         }
     }
 
-    ALOGV("%s: Successfully downloaded patch segment: %d", __FUNCTION__, index);
+    ALOGI("%s: Successfully downloaded patch segment: %d", __FUNCTION__, index);
     return err;
 }
 
@@ -1023,13 +1015,13 @@ int rome_tlv_dnld_req(int fd, int tlv_size)
 
     for(i=0;i<total_segment ;i++){
         if ((i+1) == total_segment) {
-             if ((rome_ver >= ROME_VER_1_1) && (rome_ver < ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
+             if ((chipset_ver >= ROME_VER_1_1) && (chipset_ver < ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
                /* If the Rome version is from 1.1 to 3.1
                 * 1. No CCE for the last command segment but all other segment
                 * 2. All the command segments get VSE including the last one
                 */
                 wait_cc_evt = !remain_size ? FALSE: TRUE;
-             } else if ((rome_ver == ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
+             } else if ((chipset_ver >= ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
                 /* If the Rome version is 3.2
                  * 1. None of the command segments receive CCE
                  * 2. No command segments receive VSE except the last one
@@ -1050,13 +1042,13 @@ int rome_tlv_dnld_req(int fd, int tlv_size)
         patch_dnld_pending = FALSE;
     }
 
-    if ((rome_ver >= ROME_VER_1_1) && (rome_ver < ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
+    if ((chipset_ver >= ROME_VER_1_1) && (chipset_ver < ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
        /* If the Rome version is from 1.1 to 3.1
         * 1. No CCE for the last command segment but all other segment
         * 2. All the command segments get VSE including the last one
         */
         wait_cc_evt = remain_size ? FALSE: TRUE;
-    } else if ((rome_ver == ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
+    } else if ((chipset_ver >= ROME_VER_3_2) && (gTlv_type == TLV_TYPE_PATCH)) {
         /* If the Rome version is 3.2
          * 1. None of the command segments receive CCE
          * 2. No command segments receive VSE except the last one
@@ -1069,7 +1061,6 @@ int rome_tlv_dnld_req(int fd, int tlv_size)
            wait_vsc_evt = remain_size ? TRUE: FALSE;
         }
     }
-
     patch_dnld_pending = TRUE;
     if(remain_size) err =rome_tlv_dnld_segment(fd, i, remain_size, wait_cc_evt);
     patch_dnld_pending = FALSE;
@@ -1081,9 +1072,6 @@ error:
 int rome_download_tlv_file(int fd)
 {
     int tlv_size, err = -1;
-    char nvm_file_path_bid[32] = { 0,};
-
-    memcpy(nvm_file_path_bid, nvm_file_path, strlen(nvm_file_path) - 2);
 
     /* Rampatch TLV file Downloading */
     pdata_buffer = NULL;
@@ -1097,20 +1085,16 @@ int rome_download_tlv_file(int fd)
         free (pdata_buffer);
         pdata_buffer = NULL;
     }
-    if (get_boardid_req(fd) < 0) {
-        ALOGE("%s: failed to get board id(0x%x)", __FUNCTION__, err);
-        goto default_download;
+nvm_download:
+    if(!nvm_file_path) {
+        ALOGI("%s: nvm file is not available", __FUNCTION__);
+        err = 0; // in case of nvm/rampatch is not available
+        goto error;
     }
 
-    strlcat(nvm_file_path_bid, (const char*)board_id, sizeof(nvm_file_path_bid));
-
-    if((tlv_size = rome_get_tlv_file(nvm_file_path_bid)) < 0) {
-        ALOGI("%s: %s: file doesn't exist, falling back to default file", __FUNCTION__, nvm_file_path_bid);
-default_download:
-        /* NVM TLV file Downloading */
-        if((tlv_size = rome_get_tlv_file(nvm_file_path)) < 0)
-            goto error;
-    }
+   /* NVM TLV file Downloading */
+    if((tlv_size = rome_get_tlv_file(nvm_file_path)) <= 0)
+        goto error;
 
     if((err =rome_tlv_dnld_req(fd, tlv_size)) <0 )
         goto error;
@@ -1125,6 +1109,7 @@ error:
 int rome_1_0_nvm_tag_dnld(int fd)
 {
     int i, size, err = 0;
+    unsigned char cmd[HCI_MAX_CMD_SIZE];
     unsigned char rsp[HCI_MAX_EVENT_SIZE];
 
 #if (NVM_VERSION >= ROME_1_0_100019)
@@ -1363,7 +1348,7 @@ int rome_1_0_nvm_tag_dnld(int fd)
     {
         /* Write BD Address */
         if(cmds[i][TAG_NUM_OFFSET] == TAG_NUM_2){
-            memcpy(&cmds[i][TAG_BDADDR_OFFSET], vnd_local_bd_addr, 6);
+            memcpy(&cmds[i][TAG_BDADDR_OFFSET], q->bdaddr, 6);
             ALOGI("BD Address: %.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
                 cmds[i][TAG_BDADDR_OFFSET ], cmds[i][TAG_BDADDR_OFFSET + 1],
                 cmds[i][TAG_BDADDR_OFFSET + 2], cmds[i][TAG_BDADDR_OFFSET + 3],
@@ -1471,7 +1456,7 @@ int rome_set_baudrate_req(int fd)
 
     /* Total length of the packet to be sent to the Controller */
     size = (HCI_CMD_IND + HCI_COMMAND_HDR_SIZE + VSC_SET_BAUDRATE_REQ_LEN);
-    tcflush(fd,TCIOFLUSH);
+
     /* Flow off during baudrate change */
     if ((err = userial_vendor_ioctl(USERIAL_OP_FLOW_OFF , &flags)) < 0)
     {
@@ -1581,6 +1566,7 @@ int rome_hci_reset(int fd)
     unsigned char cmd[HCI_MAX_CMD_SIZE];
     unsigned char rsp[HCI_MAX_EVENT_SIZE];
     hci_command_hdr *cmd_hdr;
+    int flags;
 
     ALOGI("%s: HCI RESET ", __FUNCTION__);
 
@@ -1618,6 +1604,7 @@ int rome_wipower_current_charging_status_req(int fd)
     unsigned char cmd[HCI_MAX_CMD_SIZE];
     unsigned char rsp[HCI_MAX_EVENT_SIZE];
     hci_command_hdr *cmd_hdr;
+    int flags;
 
     memset(cmd, 0x0, HCI_MAX_CMD_SIZE);
 
@@ -1659,42 +1646,13 @@ error:
     return err;
 }
 
-int get_boardid_req(int fd)
-{
-    int size, err = 0;
-    unsigned char cmd[HCI_MAX_CMD_SIZE];
-    unsigned char rsp[HCI_MAX_EVENT_SIZE];
-    bool cmd_supported = TRUE;
-
-    /* Frame the HCI CMD to be sent to the Controller */
-    frame_hci_cmd_pkt(cmd, EDL_GET_BOARD_ID, 0,
-    -1, EDL_PATCH_CMD_LEN);
-    /* Total length of the packet to be sent to the Controller */
-    size = (HCI_CMD_IND + HCI_COMMAND_HDR_SIZE + EDL_PATCH_CMD_LEN);
-
-    ALOGI("%s: Sending EDL_GET_BOARD_ID", __FUNCTION__);
-    err = hci_send_vs_cmd(fd, (unsigned char *)cmd, rsp, size);
-    if ( err != size) {
-        ALOGE("Failed to send EDL_GET_BOARD_ID command!");
-        cmd_supported = FALSE;
-    }
-
-    err = read_hci_event(fd, rsp, HCI_MAX_EVENT_SIZE);
-    if (err < 0) {
-        ALOGE("%s: Failed to get feature request", __FUNCTION__);
-        goto error;
-    }
-error:
-    return (cmd_supported == TRUE? err: -1);
-}
-
-
 int addon_feature_req(int fd)
 {
     int size, err = 0;
     unsigned char cmd[HCI_MAX_CMD_SIZE];
     unsigned char rsp[HCI_MAX_EVENT_SIZE];
     hci_command_hdr *cmd_hdr;
+    int flags;
 
     memset(cmd, 0x0, HCI_MAX_CMD_SIZE);
 
@@ -1757,6 +1715,7 @@ int rome_wipower_forward_handoff_req(int fd)
     unsigned char cmd[HCI_MAX_CMD_SIZE];
     unsigned char rsp[HCI_MAX_EVENT_SIZE];
     hci_command_hdr *cmd_hdr;
+    int flags;
 
     memset(cmd, 0x0, HCI_MAX_CMD_SIZE);
 
@@ -1822,10 +1781,11 @@ end:
 }
 
 
+/* This function is called with q_lock held and q is non-NULL */
 static int disable_internal_ldo(int fd)
 {
     int ret = 0;
-    if (enable_extldo) {
+    if (q->enable_extldo) {
         unsigned char cmd[5] = {0x01, 0x0C, 0xFC, 0x01, 0x32};
         unsigned char rsp[HCI_MAX_EVENT_SIZE];
 
@@ -1869,9 +1829,9 @@ int rome_soc_init(int fd, char *bdaddr)
         goto error;
     }
 
-    ALOGI("%s: Rome Version (0x%08x)", __FUNCTION__, rome_ver);
+    ALOGI("%s: Chipset Version (0x%08x)", __FUNCTION__, chipset_ver);
 
-    switch (rome_ver){
+    switch (chipset_ver){
         case ROME_VER_1_0:
             {
                 /* Set and Download the RAMPATCH */
@@ -1978,9 +1938,8 @@ download:
             ALOGI("HCI Reset is done\n");
 
             break;
-        case ROME_VER_UNKNOWN:
         default:
-            ALOGI("%s: Detected unknown ROME version", __FUNCTION__);
+            ALOGI("%s: Detected unknown SoC version: 0x%08x", __FUNCTION__, chipset_ver);
             err = -1;
             break;
     }
@@ -1988,14 +1947,4 @@ download:
 error:
     dnld_fd = -1;
     return err;
-}
-
-unsigned char convert2ascii(unsigned char temp)
-{
-  unsigned char n = temp;
-  if ( n  >= 0 && n <= 9)
-     n = n + 0x30;
-  else
-     n = n + 0x57;
-  return n;
 }

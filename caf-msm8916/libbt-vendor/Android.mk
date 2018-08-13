@@ -61,6 +61,7 @@ LOCAL_SHARED_LIBRARIES := \
         libcutils \
         liblog
 
+LOCAL_CFLAGS += -Wno-error
 LOCAL_MODULE := libbt-vendor
 LOCAL_CLANG := false
 LOCAL_MODULE_TAGS := optional

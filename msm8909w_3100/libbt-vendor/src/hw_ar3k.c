@@ -34,9 +34,8 @@ extern "C" {
 
 #define LOG_TAG "bt_vendor"
 
-#include <sys/uio.h>
 #include <sys/socket.h>
-#include <log/log.h>
+#include <utils/Log.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <signal.h>
@@ -47,12 +46,11 @@ extern "C" {
 #include <ctype.h>
 #include <cutils/properties.h>
 #include <stdlib.h>
-#include <string.h>
 #include <termios.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "bt_hci_bdroid.h"
+#include "bt_vendor_qcom.h"
 #include "hci_uart.h"
 #include "hw_ar3k.h"
 
@@ -439,19 +437,19 @@ static int set_cntrlr_baud(int fd, int speed)
 static int get_ps_type(char *ptr, int index, char *type, char *sub_type)
 {
     int i;
-    int delim = false;
+    int delim = FALSE;
 
     if (index > MAX_PREAMBLE_LEN)
         return -EILSEQ;
 
     for (i = 1; i < index; i++) {
         if (__is_delim(ptr[i])) {
-            delim = true;
+            delim = TRUE;
             continue;
         }
 
         if (isalpha(ptr[i])) {
-            if (delim == false)
+            if (delim == FALSE)
                 (*type) = toupper(ptr[i]);
             else
                 (*sub_type)	= toupper(ptr[i]);
@@ -476,7 +474,7 @@ static int get_input_format(char *buf, struct ps_entry_type *format)
     char sub_type = '\0';
 
     format->type = PS_HEX;
-    format->array = true;
+    format->array = TRUE;
 
     if (strstr(buf, "[") != buf)
         return 0;
@@ -490,10 +488,10 @@ static int get_input_format(char *buf, struct ps_entry_type *format)
 
     /* Check is data type is of array */
     if (type == ARRAY || sub_type == ARRAY)
-        format->array = true;
+        format->array = TRUE;
 
     if (type == STRING || sub_type == STRING)
-        format->array = false;
+        format->array = FALSE;
 
     if (type == DECIMAL || type == BINARY)
         format->type = PS_DEC;
@@ -522,7 +520,7 @@ static unsigned int read_data_in_section(char *buf, struct ps_entry_type type)
         ptr++;
     }
 
-    if (type.type == PS_HEX && type.array != true)
+    if (type.type == PS_HEX && type.array != TRUE)
         return strtol(ptr, NULL, 16);
 
     return UNDEFINED;
@@ -635,7 +633,7 @@ static int ath_parse_ps(FILE *stream)
             read_count = (byte_count > ENTRY_PER_LINE) ?
             ENTRY_PER_LINE : byte_count;
 
-            if (format.type == PS_HEX && format.array == true) {
+            if (format.type == PS_HEX && format.array == TRUE) {
                 while (read_count > 0) {
                     update_tag_data(tag, &status, ptr);
                     read_count -= 2;
