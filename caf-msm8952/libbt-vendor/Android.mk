@@ -92,6 +92,16 @@ ifeq ($(QCOM_BT_READ_ADDR_FROM_PROP),true)
 LOCAL_CFLAGS += -DREAD_BT_ADDR_FROM_PROP
 endif
 
+LOCAL_CFLAGS += \
+      -Wall \
+      -Werror \
+      -Wno-error=user-defined-warnings \
+      -Wno-incompatible-pointer-types-discards-qualifiers \
+      -Wno-unused-function \
+      -Wno-unused-label \
+      -Wno-unused-parameter \
+      -Wno-unused-variable \
+
 #include $(LOCAL_PATH)/vnd_buildcfg.mk
 
 include $(BUILD_SHARED_LIBRARY)
