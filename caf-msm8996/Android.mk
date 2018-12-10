@@ -1,3 +1,4 @@
+ifneq ($(filter msm8937 msm8953 msm8996,$(TARGET_BOARD_PLATFORM)),)
 LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
@@ -11,3 +12,4 @@ include $(TMP_LOCAL_PATH)/libbt-vendor/Android.mk
 ifeq ($(TARGET_USE_QTI_BT_STACK),true)
 include $(TMP_LOCAL_PATH)/bthost_ipc/Android.mk
 endif #TARGET_USE_QTI_BT_STACK
+endif
